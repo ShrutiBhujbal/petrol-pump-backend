@@ -4,7 +4,9 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const User = require("../models/User");
-const SECRET_KEY = "petrolpumpsecret";
+
+const SECRET_KEY = process.env.JWT_SECRET || "petrolpumpsecret";
+
 
 router.post("/signup", async (req, res) => {
     try {
@@ -15,7 +17,16 @@ router.post("/signup", async (req, res) => {
             return res.status(400).json({ message: "User already exists" });
         }
 
-        const newUser = new User({ name, email, password, role });
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = new User({
+            name,
+            email,
+            password: hashedPassword,
+            role
+        });
+
         await newUser.save();
 
         res.status(201).json({ message: "Account created successfully" });
@@ -24,6 +35,7 @@ router.post("/signup", async (req, res) => {
         res.status(500).json({ message: "Server error" });
     }
 });
+
 
 router.post("/login", async (req, res) => {
     try {
@@ -34,12 +46,23 @@ router.post("/login", async (req, res) => {
             return res.status(400).json({ message: "Invalid credentials" });
         }
 
-        if (user.password !== password) {
+
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
             return res.status(400).json({ message: "Invalid credentials" });
         }
 
+
+        const token = jwt.sign(
+            { id: user._id, role: user.role },
+            SECRET_KEY,
+            { expiresIn: "1d" }
+        );
+
         res.json({
             message: "Login successful",
+            token,
             role: user.role
         });
 
